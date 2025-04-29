@@ -2,7 +2,7 @@
 
 # ================== READ ME ================== #
 # Elastic Cluster Maintenance Script
-# Uses curl with client cert if needed. 
+# Uses curl with client cert.
 #
 # Modify variables as needed.
 # ================== READ ME ================== #
@@ -103,7 +103,8 @@ indices_menu() {
 }
 
 maintenance_cluster_menu() {
-  echo "Maintenance > Cluster:"
+  echo ""
+  echo "Maintenance > Cluster"
   echo "1) Set to primaries"
   echo "2) Set to null"
   read -r -p "Select an option: " m_cluster_choice
@@ -115,7 +116,8 @@ maintenance_cluster_menu() {
 }
 
 maintenance_shards_menu() {
-  echo "Maintenance > Shards:"
+  echo ""
+  echo "Maintenance > Shards"
   echo "1) Reroute retry"
   read -r -p "Select an option: " m_shards_choice
   case "$m_shards_choice" in
@@ -125,7 +127,8 @@ maintenance_shards_menu() {
 }
 
 maintenance_indices_menu() {
-  echo "Maintenance > Indices:"
+  echo "Maintenance > Indices"
+  echo ""
   echo "1) Fill"
   echo "2) Fill"
   read -r -p "Select an option: " m_indices_choice
@@ -158,7 +161,7 @@ while true; do
   echo "1) Cluster"
   echo "2) Shards"
   echo "3) Indices"
-  echo -e "9) Maintenance ${RED}!! DANGER !!${NC}"
+  echo -e "963) Maintenance ${RED}!! DANGER !!${NC}"
   echo "0) Exit"
   echo ""
 
@@ -167,7 +170,7 @@ while true; do
     1) cluster_menu ;;
     2) shards_menu ;;
     3) indices_menu ;;
-    9) maintenance_menu ;;
+    963) maintenance_menu ;;
     0) echo "Exiting..."; exit 0 ;;
     *) echo "Invalid choice." ;;
   esac
