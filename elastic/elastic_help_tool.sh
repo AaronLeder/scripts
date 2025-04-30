@@ -9,9 +9,11 @@
 
 # ====== Variables ====== #
 ES_URL="http://localhost:9200"
-ES_USER="elastic"
-ES_PW="changeme123"
+
+# ====== PKI ====== #
 CACERT="/path/to/ca.cert"
+ES_CERT="/path/to/es.cert"
+ES_KEY="/path/to/es.key"
 
 # ====== Colors ====== #
 RED='\033[0;31m' # Red text
@@ -52,6 +54,39 @@ echo -e "       can cause ${RED}harm${NC} to your cluster!!!"
 echo -e "******************** ${RED}!!!${NC} ********************"
 
 echo ""
+echo "You may hardcode usernames, passwords, etc--not recommended!"
+
+# You may hardcode these; 
+# Just remember to comment out the read below for whichever you want to hardcode!
+ES_USER="elastic"
+#ES_PW="changeme123"
+
+echo ""
+
+#read -r -p "Enter your ES username: " ES_USER
+read -r -p "Enter your ES password: " ES_PW
+
+echo ""
+
+# ========= AUTH Method ========= #
+echo "Select authentication components to use (separate multiple with commas):"
+echo "1) Use --cacert"
+echo "2) Use --cert"
+echo "3) Use --key"
+echo "4) No certs (use --insecure)"
+read -r -p "Your selection (e.g. 1,2,3): " auth_selection
+
+AUTH_FLAGS=""
+IFS=',' read -ra OPTIONS <<< "$auth_selection"
+for opt in "${OPTIONS[@]}"; do
+  case "$opt" in
+    1) AUTH_FLAGS+=" --cacert $CA_CERT" ;;
+    2) AUTH_FLAGS+=" --cert $ES_CERT" ;;
+    3) AUTH_FLAGS+=" --key $ES_KEY" ;;
+    4) AUTH_FLAGS="--insecure" ; break ;;  # override everything else
+    *) echo "Unknown option $opt ignored." ;;
+  esac
+done
 
 # ====== Functions ====== #
 cluster_menu() {
@@ -200,6 +235,7 @@ while true; do
   echo "1) Cluster"
   echo "2) Shards"
   echo "3) Indices"
+  echo "4) Messages"
   echo -e "963) Maintenance ${RED}!! DANGER !!${NC}"
   echo "0) Exit"
   echo ""
