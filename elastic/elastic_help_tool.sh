@@ -10,8 +10,8 @@
 # ====== Variables ====== #
 ES_URL="http://localhost:9200"
 
-# ====== PKI ====== #
-CACERT="/path/to/ca.cert"
+# ====== PKI Locations ====== #
+CA_CERT="/path/to/ca.cert"
 ES_CERT="/path/to/es.cert"
 ES_KEY="/path/to/es.key"
 
@@ -54,7 +54,7 @@ echo -e "       can cause ${RED}harm${NC} to your cluster!!!"
 echo -e "******************** ${RED}!!!${NC} ********************"
 
 echo ""
-echo "You may hardcode usernames, passwords, etc--not recommended!"
+echo "You may hardcode usernames & passwords--not recommended!"
 
 # You may hardcode these; 
 # Just remember to comment out the read below for whichever you want to hardcode!
@@ -70,20 +70,20 @@ echo ""
 
 # ========= AUTH Method ========= #
 echo "Select authentication components to use (separate multiple with commas):"
-echo "1) Use --cacert"
+echo "1) Use --CA_CERT"
 echo "2) Use --cert"
 echo "3) Use --key"
-echo "4) No certs (use --insecure)"
+echo "4) No certs (use --insecure) [this overrides everything else!]"
 read -r -p "Your selection (e.g. 1,2,3): " auth_selection
 
 AUTH_FLAGS=""
 IFS=',' read -ra OPTIONS <<< "$auth_selection"
 for opt in "${OPTIONS[@]}"; do
   case "$opt" in
-    1) AUTH_FLAGS+=" --cacert $CA_CERT" ;;
+    1) AUTH_FLAGS+=" --CA_CERT $CA_CERT" ;;
     2) AUTH_FLAGS+=" --cert $ES_CERT" ;;
     3) AUTH_FLAGS+=" --key $ES_KEY" ;;
-    4) AUTH_FLAGS="--insecure" ; break ;;  # override everything else
+    4) AUTH_FLAGS="--insecure" ; break ;;
     *) echo "Unknown option $opt ignored." ;;
   esac
 done
@@ -99,14 +99,15 @@ cluster_menu() {
   read -r -p "Select an option: " cluster_choice
 
   case "$cluster_choice" in
-  1) curl -XGET --cacert $CACERT -u $ES_USER:$ES_PW "$ES_URL/_cluster/health" ;;
-  2) curl -XGET --cacert $CACERT -u $ES_USER:$ES_PW "$ES_URL/_cluster/health_report" ;;
-  3) curl -XGET --cacert $CACERT -u $ES_USER:$ES_PW "$ES_URL/_nodes" ;;
-  4) curl -XGET --cacert $CACERT -u $ES_USER:$ES_PW "$ES_URL/_cluster/settings" ;;
+  1) curl -XGET "$AUTH_FLAGS" -u $ES_USER:"$ES_PW" "$ES_URL/_cluster/health" ;;
+  2) curl -XGET "$AUTH_FLAGS" -u $ES_USER:"$ES_PW" "$ES_URL/_cluster/health_report" ;;
+  3) curl -XGET "$AUTH_FLAGS" -u $ES_USER:"$ES_PW" "$ES_URL/_nodes" ;;
+  4) curl -XGET "$AUTH_FLAGS" -u $ES_USER:"$ES_PW" "$ES_URL/_cluster/settings" ;;
   *) echo "Invalid choice." ;;
   esac
 }
 
+# ====== Shards Menu ====== #
 shards_menu() {
   echo "# ===== Shards ===== #"
   echo ""
@@ -115,13 +116,14 @@ shards_menu() {
   echo "3) Get red shards"
   read -r -p "Select an option: " shards_choice
   case "$shards_choice" in
-  1) curl -XGET --cacert $CACERT -u $ES_USER:$ES_PW "$ES_URL/_cat/shards?v" ;;
-  2) curl -XGET --cacert $CACERT -u $ES_USER:$ES_PW "$ES_URL/_cat/shards?v&health=yellow" ;;
-  3) curl -XGET --cacert $CACERT -u $ES_USER:$ES_PW "$ES_URL/_cat/shards?v&health=red" ;;
+  1) curl -XGET "$AUTH_FLAGS" -u $ES_USER:"$ES_PW" "$ES_URL/_cat/shards?v" ;;
+  2) curl -XGET "$AUTH_FLAGS" -u $ES_USER:"$ES_PW" "$ES_URL/_cat/shards?v&health=yellow" ;;
+  3) curl -XGET "$AUTH_FLAGS" -u $ES_USER:"$ES_PW" "$ES_URL/_cat/shards?v&health=red" ;;
   *) echo "Invalid choice." ;;
   esac
 }
 
+# ====== Indices Menu ====== #
 indices_menu() {
   echo "# ===== Indices ===== #"
   echo ""
@@ -130,13 +132,14 @@ indices_menu() {
   echo "3) Index name (desc)"
   read -r -p "Select an option: " indices_choice
   case "$indices_choice" in
-  1) curl -XGET --cacert $CACERT -u $ES_USER:$ES_PW "$ES_URL/_cat/indices?v&s=store.size:desc" ;;
-  2) curl -XGET --cacert $CACERT -u $ES_USER:$ES_PW "$ES_URL/_cat/indices?v&s=pri:desc" ;;
-  3) curl -XGET --cacert $CACERT -u $ES_USER:$ES_PW "$ES_URL/_cat/indices?v&s=index:desc" ;;
+  1) curl -XGET "$AUTH_FLAGS" -u $ES_USER:"$ES_PW" "$ES_URL/_cat/indices?v&s=store.size:desc" ;;
+  2) curl -XGET "$AUTH_FLAGS" -u $ES_USER:"$ES_PW" "$ES_URL/_cat/indices?v&s=pri:desc" ;;
+  3) curl -XGET "$AUTH_FLAGS" -u $ES_USER:"$ES_PW" "$ES_URL/_cat/indices?v&s=index:desc" ;;
   *) echo "Invalid choice." ;;
   esac
 }
 
+# ====== Messages Menu ====== #
 messages_menu() {
   echo "# ===== Messages ===== #"
   echo ""
@@ -150,14 +153,14 @@ messages_menu() {
     echo ""
     echo "Can be comma-separated, or use wildcard (*)"
     read -r -p "Enter local index name: " index
-    curl -XGET --cacert $CACERT -u $ES_USER:$ES_PW "$ES_URL/$index/_search?pretty"
+    curl -XGET "$AUTH_FLAGS" -u $ES_USER:"$ES_PW" "$ES_URL/$index/_search?pretty"
     ;;
 
   2)
     echo ""
     read -r -p "Enter full remote Elasticsearch URL (Ex. https://remotehost:9200): " remote_url
     read -r -p "Enter remote index name: " index
-    curl -XGET --cacert $CACERT -u $ES_USER:$ES_PW "$remote_url/$index/_search?pretty"
+    curl -XGET "$AUTH_FLAGS" -u $ES_USER:"$ES_PW" "$remote_url/$index/_search?pretty"
     ;;
 
   3)
@@ -167,7 +170,7 @@ messages_menu() {
     echo ""
     read -r -p "Enter cross-cluster alias (Ex. bob_1): " cluster_alias
     read -r -p "Enter index name: " index
-    curl -XGET --cacert $CACERT -u $ES_USER:$ES_PW "$ES_URL/${cluster_alias}:$index/_search?pretty"
+    curl -XGET "$AUTH_FLAGS" -u $ES_USER:"$ES_PW" "$ES_URL/${cluster_alias}:$index/_search?pretty"
     ;;
 
   *)
@@ -176,6 +179,7 @@ messages_menu() {
   esac
 }
 
+# ====== Maintenance Menu ====== #
 maintenance_menu() {
   echo "# ===== Maintenance ===== #"
   echo ""
@@ -198,8 +202,8 @@ maintenance_menu() {
       echo "2) Set to null"
       read -r -p "Select an option: " m_cluster_choice
       case "$m_cluster_choice" in
-      1) curl -XGET --cacert $CACERT -u $ES_USER:$ES_PW -X PUT "$ES_URL/_cluster/settings" -H 'Content-Type: application/json' -d '{"persistent":{"cluster.routing.allocation.enable":"primaries"}}' ;;
-      2) curl -XGET --cacert $CACERT -u $ES_USER:$ES_PW -X PUT "$ES_URL/_cluster/settings" -H 'Content-Type: application/json' -d '{"persistent":{"cluster.routing.allocation.enable":null}}' ;;
+      1) curl -XGET "$AUTH_FLAGS" -u $ES_USER:"$ES_PW" -X PUT "$ES_URL/_cluster/settings" -H 'Content-Type: application/json' -d '{"persistent":{"cluster.routing.allocation.enable":"primaries"}}' ;;
+      2) curl -XGET "$AUTH_FLAGS" -u $ES_USER:"$ES_PW" -X PUT "$ES_URL/_cluster/settings" -H 'Content-Type: application/json' -d '{"persistent":{"cluster.routing.allocation.enable":null}}' ;;
       *) echo "Invalid choice." ;;
       esac
     }
@@ -210,7 +214,7 @@ maintenance_menu() {
       echo "1) Reroute retry"
       read -r -p "Select an option: " m_shards_choice
       case "$m_shards_choice" in
-      1) curl -XPOST --cacert $CACERT -u $ES_USER:$ES_PW "$ES_URL/_cluster/reroute?retry_failed=true" ;;
+      1) curl -XPOST "$AUTH_FLAGS" -u $ES_USER:"$ES_PW" "$ES_URL/_cluster/reroute?retry_failed=true" ;;
       *) echo "Invalid choice." ;;
       esac
     }
