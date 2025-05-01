@@ -10,85 +10,188 @@
 # ====== Variables ====== #
 ES_URL="http://localhost:9200"
 
-# ====== PKI Locations ====== #
-CA_CERT="/path/to/ca.cert"
-ES_CERT="/path/to/es.cert"
-ES_KEY="/path/to/es.key"
-
 # ====== Colors ====== #
 RED='\033[0;31m' # Red text
 NC='\033[0m'     # No Color (reset)
 
-# ========= Script ========= #
+# ====== Auth State ====== #
+CA_CERT=""
+ES_CERT=""
+ES_KEY=""
+AUTH_FLAGS=""
+INSECURE=false
+USED_CERT=false
+
+ES_USER=""
+ES_PW=""
+
+# ====== Show help if no arguments or --help is used ====== #
+show_help() {
+  echo ""
+  echo "Usage: $0 [OPTIONS]"
+  echo ""
+  echo "Example: ./elastic_help_tool.sh --insecure --user elastic -p"
+  echo "Example: ./elastic_help_tool.sh -a /path/to/my/ca.crt --user elastic -p"
+  echo ""
+  echo "Required Authentication:"
+  echo "  --insecure,   -x               Use insecure mode (no certs)"
+  echo "      OR"
+  echo "  --ca-cert,    -a <path>        Path to CA certificate"
+  echo "  --es-cert,    -b <path>        Path to Elasticsearch client certificate"
+  echo "  --es-key,     -c <path>        Path to Elasticsearch client private key"
+  echo ""
+  echo "Required Credentials:"
+  echo "  --user,       -u <username>    Elasticsearch username"
+  echo "  --pass,       -p               Prompt for password (masked input)"
+  echo ""
+  echo "Other Options:"
+  echo "  --help,       -h               Show this help message and exit"
+  echo ""
+}
+
+# Show help if no args
+if [[ $# -eq 0 || "$1" =~ ^(--help|-h)$ ]]; then
+  show_help
+  exit 0
+fi
+
+# ====== Parse CLI args ====== #
+
+while [[ $# -gt 0 ]]; do
+  case "${1,,}" in
+  --ca-cert | -a)
+    if [[ -z "$2" || "$2" == -* ]]; then
+      echo -e "${RED}Error: --ca-cert (-a) requires a file path.${NC}"
+      exit 1
+    fi
+    CA_CERT="$2"
+    AUTH_FLAGS+=" --CA_CERT $CA_CERT"
+    USED_CERT=true
+    shift 2
+    ;;
+  --es-cert | -b)
+    if [[ -z "$2" || "$2" == -* ]]; then
+      echo -e "${RED}Error: --es-cert (-b) requires a file path.${NC}"
+      exit 1
+    fi
+    ES_CERT="$2"
+    AUTH_FLAGS+=" --cert $ES_CERT"
+    USED_CERT=true
+    shift 2
+    ;;
+  --es-key | -c)
+    if [[ -z "$2" || "$2" == -* ]]; then
+      echo -e "${RED}Error: --es-key (-c) requires a file path.${NC}"
+      exit 1
+    fi
+    ES_KEY="$2"
+    AUTH_FLAGS+=" --key $ES_KEY"
+    USED_CERT=true
+    shift 2
+    ;;
+  --insecure | -x)
+    AUTH_FLAGS="--insecure"
+    INSECURE=true
+    shift
+    ;;
+  --user | -u)
+    if [[ -z "$2" || "$2" == -* ]]; then
+      echo -e "${RED}Error: --user (-u) requires a username.${NC}"
+      exit 1
+    fi
+    ES_USER="$2"
+    shift 2
+    ;;
+  --pass | -p)
+    # Prompt for password with masking (asterisks)
+    prompt="Enter password: "
+    stty -echo
+    printf "%s" "$prompt"
+    while IFS= read -r -s -n1 char; do
+      if [[ $char == $'\0' || $char == $'\n' ]]; then
+        break
+      fi
+      ES_PW+="$char"
+      printf '*'
+    done
+    stty echo
+    echo ""
+    shift
+    ;;
+  *)
+    echo -e "${RED}Unknown argument:${NC} $1"
+    shift
+    ;;
+  esac
+done
+
+# ====== Validation ====== #
+if [[ "$INSECURE" = true && "$USED_CERT" = true ]]; then
+  echo -e "\n${RED}Error: --insecure cannot be combined with cert-based options.${NC}"
+  echo "You must provide either:"
+  echo "  --insecure (-x)"
+  echo "        OR"
+  echo "  One or more of: --ca-cert (-a)"
+  echo "                  --es-cert (-b)"
+  echo "                  --es-key  (-c)"
+  exit 1
+fi
+
+if [[ "$INSECURE" = false && "$USED_CERT" = false ]]; then
+  echo -e "\n${RED}Error: No authentication method provided.${NC}\n"
+  echo "You must provide either:"
+  echo "  --insecure (-x)"
+  echo "        OR"
+  echo "  One or more of: --ca-cert (-a)"
+  echo "                  --es-cert (-b)"
+  echo "                  --es-key  (-c)"
+  exit 1
+fi
+
+if [[ -z "$ES_USER" ]]; then
+  echo -e "\n${RED}Error: Username is required. Use --user <name> or -u <name>${NC}\n"
+  exit 1
+fi
+
+if [[ -z "$ES_PW" ]]; then
+  echo -e "\n${RED}Error: Password is required. Use --pass or -p to enter password${NC}\n"
+  exit 1
+fi
+
+# ====== Script ====== #
+# https://patorjk.com/software/taag/#p=testall&f=Chunky&t=Elastic%0AAll-in-One%0AHelp%0ATool
+# Font: Chunky
 echo "
- _______ __               __   __                                       
-|    ___|  |.---.-.-----.|  |_|__|.----.                                  
-|    ___|  ||  _  |__ --||   _|  ||  __|                                  
-|_______|__||___._|_____||____|__||____|                                 
-                                                                         
- _______ __ __        __               _______                           
-|   _   |  |  |______|__|.-----.______|       |.-----.-----.            
-|       |  |  |______|  ||     |______|   -   ||     |  -__|            
-|___|___|__|__|      |__||__|__|      |_______||__|__|_____|            
-                                                                         
- _______         __         __                                          
-|   |   |.---.-.|__|.-----.|  |_.-----.-----.---.-.-----.----.-----.    
-|       ||  _  ||  ||     ||   _|  -__|     |  _  |     |  __|  -__|    
-|__|_|__||___._||__||__|__||____|_____|__|__|___._|__|__|____|_____|    
-                                                                         
- _______               __                                               
-|_     _|.-----.-----.|  |                                              
-  |   |  |  _  |  _  ||  |                                              
-  |___|  |_____|_____||__|                                              
+            _______ __               __   __       
+           |    ___|  |.---.-.-----.|  |_|__|.----.
+           |    ___|  ||  _  |__ --||   _|  ||  __|
+           |_______|__||___._|_____||____|__||____|
+                                                  
+   _______ __ __        __               _______   
+  |   _   |  |  |______|__|.-----.______|       |.-----.-----.
+  |       |  |  |______|  ||     |______|   -   ||     |  -__|
+  |___|___|__|__|      |__||__|__|      |_______||__|__|_____|
+                                            
+                  _______         __         
+                 |   |   |.-----.|  |.-----. 
+                 |       ||  -__||  ||  _  | 
+                 |___|___||_____||__||   __| 
+                                     |__|    
+                  _______               __   
+                 |_     _|.-----.-----.|  |  
+                   |   |  |  _  |  _  ||  |  
+                   |___|  |_____|_____||__|  
 "
 
-echo "** Welcome to the Elastic Help Tool! **"
-echo ""
-echo "You may exit at any time with <CTRL+C>"
-
-echo ""
+echo -e "\n** Welcome to the Elastic All-in-One Help Tool! **\n"
+echo -e "     You may exit at any time with ${RED}<CTRL+C>${NC}\n"
 
 echo -e "******************** ${RED}!!!${NC} ********************"
 echo -e "   Please note that the ${RED}Maintenance${NC} options"
 echo -e "       can cause ${RED}harm${NC} to your cluster!!!"
-echo -e "******************** ${RED}!!!${NC} ********************"
+echo -e "******************** ${RED}!!!${NC} ********************\n"
 
-echo ""
-echo "You may hardcode usernames & passwords--not recommended!"
-
-# You may hardcode these; 
-# Just remember to comment out the read below for whichever you want to hardcode!
-ES_USER="elastic"
-#ES_PW="changeme123"
-
-echo ""
-
-#read -r -p "Enter your ES username: " ES_USER
-read -r -p "Enter your ES password: " ES_PW
-
-echo ""
-
-# ========= AUTH Method ========= #
-echo "Select authentication components to use (separate multiple with commas):"
-echo "1) Use --CA_CERT"
-echo "2) Use --cert"
-echo "3) Use --key"
-echo "4) No certs (use --insecure) [this overrides everything else!]"
-read -r -p "Your selection (e.g. 1,2,3): " auth_selection
-
-AUTH_FLAGS=""
-IFS=',' read -ra OPTIONS <<< "$auth_selection"
-for opt in "${OPTIONS[@]}"; do
-  case "$opt" in
-    1) AUTH_FLAGS+=" --CA_CERT $CA_CERT" ;;
-    2) AUTH_FLAGS+=" --cert $ES_CERT" ;;
-    3) AUTH_FLAGS+=" --key $ES_KEY" ;;
-    4) AUTH_FLAGS="--insecure" ; break ;;
-    *) echo "Unknown option $opt ignored." ;;
-  esac
-done
-
-# ====== Functions ====== #
+# ====== Cluster Menu ====== #
 cluster_menu() {
   echo "Cluster:"
   echo "1) Health"
@@ -195,42 +298,42 @@ maintenance_menu() {
   esac
 }
 
-    maintenance_cluster_menu() {
-      echo ""
-      echo "Maintenance > Cluster"
-      echo "1) Set to primaries"
-      echo "2) Set to null"
-      read -r -p "Select an option: " m_cluster_choice
-      case "$m_cluster_choice" in
-      1) curl -XGET "$AUTH_FLAGS" -u $ES_USER:"$ES_PW" -X PUT "$ES_URL/_cluster/settings" -H 'Content-Type: application/json' -d '{"persistent":{"cluster.routing.allocation.enable":"primaries"}}' ;;
-      2) curl -XGET "$AUTH_FLAGS" -u $ES_USER:"$ES_PW" -X PUT "$ES_URL/_cluster/settings" -H 'Content-Type: application/json' -d '{"persistent":{"cluster.routing.allocation.enable":null}}' ;;
-      *) echo "Invalid choice." ;;
-      esac
-    }
-    
-    maintenance_shards_menu() {
-      echo ""
-      echo "Maintenance > Shards"
-      echo "1) Reroute retry"
-      read -r -p "Select an option: " m_shards_choice
-      case "$m_shards_choice" in
-      1) curl -XPOST "$AUTH_FLAGS" -u $ES_USER:"$ES_PW" "$ES_URL/_cluster/reroute?retry_failed=true" ;;
-      *) echo "Invalid choice." ;;
-      esac
-    }
-    
-    maintenance_indices_menu() {
-      echo "Maintenance > Indices"
-      echo ""
-      echo "1) Fill"
-      echo "2) Fill"
-      read -r -p "Select an option: " m_indices_choice
-      case "$m_indices_choice" in
-      1) echo "Placeholder: Implement 'fill' logic for indices #1" ;;
-      2) echo "Placeholder: Implement 'fill' logic for indices #2" ;;
-      *) echo "Invalid choice." ;;
-      esac
-    }
+maintenance_cluster_menu() {
+  echo ""
+  echo "Maintenance > Cluster"
+  echo "1) Set to primaries"
+  echo "2) Set to null"
+  read -r -p "Select an option: " m_cluster_choice
+  case "$m_cluster_choice" in
+  1) curl -XGET "$AUTH_FLAGS" -u $ES_USER:"$ES_PW" -X PUT "$ES_URL/_cluster/settings" -H 'Content-Type: application/json' -d '{"persistent":{"cluster.routing.allocation.enable":"primaries"}}' ;;
+  2) curl -XGET "$AUTH_FLAGS" -u $ES_USER:"$ES_PW" -X PUT "$ES_URL/_cluster/settings" -H 'Content-Type: application/json' -d '{"persistent":{"cluster.routing.allocation.enable":null}}' ;;
+  *) echo "Invalid choice." ;;
+  esac
+}
+
+maintenance_shards_menu() {
+  echo ""
+  echo "Maintenance > Shards"
+  echo "1) Reroute retry"
+  read -r -p "Select an option: " m_shards_choice
+  case "$m_shards_choice" in
+  1) curl -XPOST "$AUTH_FLAGS" -u $ES_USER:"$ES_PW" "$ES_URL/_cluster/reroute?retry_failed=true" ;;
+  *) echo "Invalid choice." ;;
+  esac
+}
+
+maintenance_indices_menu() {
+  echo "Maintenance > Indices"
+  echo ""
+  echo "1) Fill"
+  echo "2) Fill"
+  read -r -p "Select an option: " m_indices_choice
+  case "$m_indices_choice" in
+  1) echo "Placeholder: Implement 'fill' logic for indices #1" ;;
+  2) echo "Placeholder: Implement 'fill' logic for indices #2" ;;
+  *) echo "Invalid choice." ;;
+  esac
+}
 
 # ====== Main Menu ====== #
 while true; do
