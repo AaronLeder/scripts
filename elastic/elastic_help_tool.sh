@@ -25,105 +25,96 @@ USED_CERT=false
 ES_USER=""
 ES_PW=""
 
-# ====== Show help if no arguments or --help is used ====== #
+# ====== Help ====== #
 show_help() {
-  echo ""
-  echo "Usage: $0 [OPTIONS]"
-  echo ""
-  echo "Example: ./elastic_help_tool.sh --insecure --user elastic -p"
-  echo "Example: ./elastic_help_tool.sh -a /path/to/my/ca.crt --user elastic -p"
-  echo ""
-  echo "Required Authentication:"
-  echo "  --insecure,   -x               Use insecure mode (no certs)"
-  echo "      OR"
-  echo "  --ca-cert,    -a <path>        Path to CA certificate"
-  echo "  --es-cert,    -b <path>        Path to Elasticsearch client certificate"
-  echo "  --es-key,     -c <path>        Path to Elasticsearch client private key"
-  echo ""
-  echo "Required Credentials:"
-  echo "  --user,       -u <username>    Elasticsearch username"
-  echo "  --pass,       -p               Prompt for password (masked input)"
-  echo ""
-  echo "Other Options:"
-  echo "  --help,       -h               Show this help message and exit"
-  echo ""
+    echo ""
+    echo "Usage: $0 [OPTIONS]"
+    echo ""
+    echo "Required Authentication (choose one mode):"
+    echo "  --insecure,      -x               Use insecure mode (no certs)"
+    echo "     OR"
+    echo "  --ca-cert,       -a <path>        Path to CA certificate"
+    echo "  --es-cert,       -b <path>        Path to Elasticsearch client certificate"
+    echo "  --es-key,        -c <path>        Path to Elasticsearch client private key"
+    echo ""
+    echo "Required Credentials:"
+    echo "  --user,          -u <username>    Input username for Elasticsearch"
+    echo "  --hardcode-user, -U <username>    Hardcode the Elasticsearch username"
+    echo ""
+    echo "Other:"
+    echo "  --help,          -h               Show this help message and exit"
+    echo ""
 }
 
-# Show help if no args
+# ====== Show help if no arguments ====== #
 if [[ $# -eq 0 || "$1" =~ ^(--help|-h)$ ]]; then
-  show_help
-  exit 0
+    show_help
+    exit 0
 fi
 
 # ====== Parse CLI args ====== #
-
 while [[ $# -gt 0 ]]; do
-  case "${1,,}" in
-  --ca-cert | -a)
-    if [[ -z "$2" || "$2" == -* ]]; then
-      echo -e "${RED}Error: --ca-cert (-a) requires a file path.${NC}"
-      exit 1
-    fi
-    CA_CERT="$2"
-    AUTH_FLAGS+=" --CA_CERT $CA_CERT"
-    USED_CERT=true
-    shift 2
-    ;;
-  --es-cert | -b)
-    if [[ -z "$2" || "$2" == -* ]]; then
-      echo -e "${RED}Error: --es-cert (-b) requires a file path.${NC}"
-      exit 1
-    fi
-    ES_CERT="$2"
-    AUTH_FLAGS+=" --cert $ES_CERT"
-    USED_CERT=true
-    shift 2
-    ;;
-  --es-key | -c)
-    if [[ -z "$2" || "$2" == -* ]]; then
-      echo -e "${RED}Error: --es-key (-c) requires a file path.${NC}"
-      exit 1
-    fi
-    ES_KEY="$2"
-    AUTH_FLAGS+=" --key $ES_KEY"
-    USED_CERT=true
-    shift 2
-    ;;
-  --insecure | -x)
-    AUTH_FLAGS="--insecure"
-    INSECURE=true
-    shift
-    ;;
-  --user | -u)
-    if [[ -z "$2" || "$2" == -* ]]; then
-      echo -e "${RED}Error: --user (-u) requires a username.${NC}"
-      exit 1
-    fi
-    ES_USER="$2"
-    shift 2
-    ;;
-  --pass | -p)
-    # Prompt for password with masking (asterisks)
-    prompt="Enter password: "
-    stty -echo
-    printf "%s" "$prompt"
-    while IFS= read -r -s -n1 char; do
-      if [[ $char == $'\0' || $char == $'\n' ]]; then
-        break
-      fi
-      ES_PW+="$char"
-      printf '*'
-    done
-    stty echo
-    echo ""
-    shift
-    ;;
-  *)
-    echo -e "${RED}Unknown argument:${NC} $1"
-    shift
-    ;;
-  esac
+    case "${1,,}" in
+        --ca-cert|-a)
+            if [[ -z "$2" || "$2" == -* ]]; then
+                echo -e "${RED}Error: --ca-cert (-a) requires a file path.${NC}"
+                exit 1
+            fi
+            CA_CERT="$2"
+            AUTH_FLAGS+=" --CA_CERT $CA_CERT"
+            USED_CERT=true
+            shift 2
+            ;;
+        --es-cert|-b)
+            if [[ -z "$2" || "$2" == -* ]]; then
+                echo -e "${RED}Error: --es-cert (-b) requires a file path.${NC}"
+                exit 1
+            fi
+            ES_CERT="$2"
+            AUTH_FLAGS+=" --cert $ES_CERT"
+            USED_CERT=true
+            shift 2
+            ;;
+        --es-key|-c)
+            if [[ -z "$2" || "$2" == -* ]]; then
+                echo -e "${RED}Error: --es-key (-c) requires a file path.${NC}"
+                exit 1
+            fi
+            ES_KEY="$2"
+            AUTH_FLAGS+=" --key $ES_KEY"
+            USED_CERT=true
+            shift 2
+            ;;
+        --insecure|-x)
+            AUTH_FLAGS="--insecure"
+            INSECURE=true
+            shift
+            ;;
+        --hardcode-user|-U|--user|-u)
+            if [[ -z "$2" || "$2" == -* ]]; then
+            echo -e "${RED}Error: --user (-u or -U) requires a username.${NC}"
+            exit 1
+            fi
+            ES_USER="$2"
+            shift 2
+            ;;
+
+        *)
+            echo -e "${RED}Unknown argument:${NC} $1"
+            shift
+            ;;
+    esac
 done
+
+# ====== Username Validation ====== #
+if [[ -z "$ES_USER" ]]; then
+    echo -e "\n${RED}Error: Username is required.${NC}"
+    echo "Use either:"
+    echo "  --hardcode-user (-U) to set a default"
+    echo "  OR"
+    echo "  --user (-u) to provide one at runtime"
+    exit 1
+fi
 
 # ====== Validation ====== #
 if [[ "$INSECURE" = true && "$USED_CERT" = true ]]; then
@@ -149,14 +140,21 @@ if [[ "$INSECURE" = false && "$USED_CERT" = false ]]; then
 fi
 
 if [[ -z "$ES_USER" ]]; then
-  echo -e "\n${RED}Error: Username is required. Use --user <name> or -u <name>${NC}\n"
-  exit 1
+    echo -e "\n${RED}Error: Username is required. Use --hardcode-user or -u <name>${NC}"
+    exit 1
 fi
 
-if [[ -z "$ES_PW" ]]; then
-  echo -e "\n${RED}Error: Password is required. Use --pass or -p to enter password${NC}\n"
-  exit 1
-fi
+# ====== Prompt for Password ====== #
+prompt="Enter password for user $ES_USER: "
+stty -echo
+printf "%s" "$prompt"
+while IFS= read -r -s -n1 char; do
+    [[ $char == $'\0' || $char == $'\n' ]] && break
+    ES_PW+="$char"
+    printf '*'
+done
+stty echo
+echo ""
 
 # ====== Script ====== #
 # https://patorjk.com/software/taag/#p=testall&f=Chunky&t=Elastic%0AAll-in-One%0AHelp%0ATool
